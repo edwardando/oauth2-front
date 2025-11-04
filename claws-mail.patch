@@ -1,0 +1,134 @@
+From fee944b9e79cf0b69c528e9d12e1df581a814d5b Mon Sep 17 00:00:00 2001
+From: tharvik <tharvik@users.noreply.github.com>
+Date: Tue, 4 Nov 2025 12:29:19 +0100
+Subject: [PATCH] oauth2: add EPFL
+
+---
+ src/oauth2.c | 97 ++++++++++++++++++++++++++++++++++++++++------------
+ 1 file changed, 76 insertions(+), 21 deletions(-)
+
+diff --git a/src/oauth2.c b/src/oauth2.c
+index c2235e6..e5eeea7 100644
+--- a/src/oauth2.c
++++ b/src/oauth2.c
+@@ -194,6 +194,28 @@ static gchar *oauth2_tmpl =
+ 	"oa2_two_stage_pop=0\n"
+ 	"oa2_codemarker_start=\n"
+ 	"oa2_codemarker_stop=\n"
++	"[Oauth2: 6]\n"
++	"oa2_name=EPFL\n"
++	"oa2_base_url=localhost:1312\n"
++	"oa2_client_id=\n"
++	"oa2_client_secret=\n"
++	"oa2_redirect_uri=http://127.0.0.1:8888\n"
++	"oa2_auth_resource=/authorize\n"
++	"oa2_access_resource=/token\n"
++	"oa2_refresh_resource=/token\n"
++	"oa2_response_type=code\n"
++	"oa2_scope_for_auth=offline_access https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/POP.AccessAsUser.All https://outlook.office.com/SMTP.Send\n"
++	"oa2_grant_type_access=authorization_code\n"
++	"oa2_grant_type_refresh=refresh_token\n"
++	"oa2_tenant=common\n"
++	"oa2_state=\n"
++	"oa2_access_type=offline\n"
++	"oa2_scope_for_access=offline_access https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/POP.AccessAsUser.All https://outlook.office.com/SMTP.Send\n"
++	"oa2_response_mode=query\n"
++	"oa2_header_auth_basic=\n"
++	"oa2_two_stage_pop=1\n"
++	"oa2_codemarker_start=code=\n"
++	"oa2_codemarker_stop=&session_state=\n\n"
+ 	;
+ 
+ static Oauth2Info *oauth2_new_from_config(const gchar *label)
+@@ -487,25 +509,57 @@ int oauth2_obtain_tokens (Oauth2Service provider, OAUTH2Data *OAUTH2Data, const
+                 log_message(LOG_PROTOCOL, _("OAuth2 missing authorization code\n"));
+                 return (1);
+         }
+-        debug_print("Connect: %s:443\n", oa2->oa2_base_url);
+-	sock = sock_connect(oa2->oa2_base_url, 443);
+-	if (sock == NULL) {
+-                log_message(LOG_PROTOCOL, _("OAuth2 connection error\n"));
+-                g_free(token);
+-                return (1);
+-        }
+-        sock->ssl_cert_auto_accept = TRUE;
+-	sock->use_tls_sni = TRUE;
+-	sock_set_nonblocking_mode(sock, FALSE);
+-	gint timeout_secs = prefs_common_get_prefs()->io_timeout_secs;
+-	debug_print("Socket timeout: %i sec(s)\n", timeout_secs);
+-	sock_set_io_timeout(timeout_secs);
+-	sock->gnutls_priority = GNUTLS_PRIORITY;
+-        if (ssl_init_socket(sock) == FALSE) {
+-                log_message(LOG_PROTOCOL, _("OAuth2 TLS connection error\n"));
+-                g_free(token);
+-                return (1);
+-        }
++  if (!strncmp(oa2->oa2_base_url, "localhost", 9)) {
++    tmp = g_strdup(oa2->oa2_base_url);
++    if (strchr(tmp, ':') == NULL) {
++      g_free(token);
++      g_free(tmp);
++      debug_print("Configured OAUTH2 provider for localhost without port\n");
++      return (1);
++    }
++    *strchr(tmp, ':') = '\0';
++    i = atoi(oa2->oa2_base_url + 10);
++    if (i == 0) {
++      g_free(token);
++      g_free(tmp);
++      debug_print("Configured OAUTH2 provider for localhost with invalid port\n");
++      return (1);
++    }
++
++    debug_print("Connect: %s:%i\n", tmp, i);
++    sock = sock_connect(tmp, i);
++    g_free(tmp);
++    if (sock == NULL) {
++      log_message(LOG_PROTOCOL, _("OAuth2 connection error\n"));
++      g_free(token);
++      return (1);
++    }
++
++    sock_set_nonblocking_mode(sock, FALSE);
++    gint timeout_secs = prefs_common_get_prefs()->io_timeout_secs;
++    debug_print("Socket timeout: %i sec(s)\n", timeout_secs);
++    sock_set_io_timeout(timeout_secs);
++  } else {
++    debug_print("Connect: %s:443\n", oa2->oa2_base_url);
++		sock = sock_connect(oa2->oa2_base_url, 443);
++		if (sock == NULL) {
++	                log_message(LOG_PROTOCOL, _("OAuth2 connection error\n"));
++	                g_free(token);
++	                return (1);
++	        }
++	        sock->ssl_cert_auto_accept = TRUE;
++		sock->use_tls_sni = TRUE;
++		sock_set_nonblocking_mode(sock, FALSE);
++		gint timeout_secs = prefs_common_get_prefs()->io_timeout_secs;
++		debug_print("Socket timeout: %i sec(s)\n", timeout_secs);
++		sock_set_io_timeout(timeout_secs);
++		sock->gnutls_priority = GNUTLS_PRIORITY;
++	        if (ssl_init_socket(sock) == FALSE) {
++	                log_message(LOG_PROTOCOL, _("OAuth2 TLS connection error\n"));
++	                g_free(token);
++	                return (1);
++	        }
++  }
+ 
+ 	refresh_token = g_malloc(OAUTH2BUFSIZE+1);	
+ 	access_token = g_malloc(OAUTH2BUFSIZE+1);
+@@ -777,8 +831,9 @@ gint oauth2_authorisation_url (Oauth2Service provider, gchar **url, const gchar
+ 	  client_id = g_strdup(oa2->oa2_client_id);
+ 	
+ 	uri = g_uri_escape_string (custom_client_id[0] ? custom_client_id : client_id, NULL, FALSE);
+-	*url = g_strconcat ("https://", oa2->oa2_base_url, oa2->oa2_auth_resource, "?client_id=",
+-			    uri, NULL);
++  *url = g_strconcat(
++      strncmp(oa2->oa2_base_url, "localhost", 9) ? "https://" : "http://",
++      oa2->oa2_base_url, oa2->oa2_auth_resource, "?client_id=", uri, NULL);
+ 	g_free(uri);
+ 	if (client_id)
+ 	  g_free(client_id);
+-- 
+2.51.0
+
