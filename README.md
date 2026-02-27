@@ -62,3 +62,17 @@ Now to configure claws-mail:
   - This will make a request to the proxy (which open a localhost:1312), who will then use the geckodriver to open a window where you should log in
   - After logging in a "Unable to connect" flashes up (this is OK). There should be a window waiting saying OAuth was imported successfully into claws-mail. You can close it.
   - If successful, you will find your password filled in, well done!
+
+# Configuration for aerc
+
+The account configurations looks like
+
+```
+[$account-name]
+source             = imaps+xoauth2://$email@outlook.office365.com:993?token_endpoint=http://localhost:1312/token
+source-cred-cmd    = echo $your-refresh-token
+outgoing           = smtp+xoauth2://$email@smtp.office365.com:587?token_endpoint=http://localhost:1312/token
+outgoing-cred-cmd  = echo $your-refresh-token
+```
+
+You can generate the refresh token by using any `redirect_uri` and looking for the `code` params in the returned-to url.
