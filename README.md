@@ -22,8 +22,9 @@ With these two running, on a non-claws-mail client, you can now set the proxy (h
 it forwards everything to upstream expect for `client_id` and `redirect_uri`.
 
 The proxy offers two routes
- * `/authorize` for getting the long term token
- * `/token` for exchanging the token w/ a temporary one
+ * `/authorize` for getting the authorization code
+ * `/exchange` for exchanging the authorization code for a long term token
+ * `/token` for exchanging the long term token for a session one
 
 
 # Configuration for claws-mail
@@ -75,4 +76,5 @@ outgoing           = smtp+xoauth2://$email@smtp.office365.com:587?token_endpoint
 outgoing-cred-cmd  = echo $your-refresh-token
 ```
 
-You can generate the refresh token by using any `redirect_uri` and looking for the `code` params in the returned-to url.
+You can generate the refresh token by first getting an authorize code and then exchanging it for a long-term/refresh token.
+After starting the proxy, go to http://localhost:1312/authorize?redirect_uri=http://localhost:1312/exchange to generate it.

@@ -27,6 +27,11 @@ async fn main() -> Result<()> {
     }
 
     #[derive(serde::Deserialize, Debug)]
+    struct ExchangeQuery {
+        code: String,
+    }
+
+    #[derive(serde::Deserialize, Debug)]
     struct TokenForm {
         refresh_token: String,
     }
@@ -38,7 +43,9 @@ async fn main() -> Result<()> {
                 async |Query(AuthorizeQuery {
                            redirect_uri: mut redirect,
                        }): Query<AuthorizeQuery>| -> axum::response::Result<Redirect> {
-                    let code = authorize().await.map_err(|err| err.to_string())?;
+                    let code = authorize()
+                        .instrument(trace_span!("/authorize", ?redirect))
+                        .await.map_err(|err| err.to_string())?;
                     redirect
                         .query_pairs_mut()
                         .append_pair("code", code.as_str());
@@ -47,6 +54,16 @@ async fn main() -> Result<()> {
                 }
             ),
         )
+        .route("/exchange", get(
+                async |Query(ExchangeQuery {
+                           code,
+                       }): Query<ExchangeQuery>| -> axum::response::Result<String> {
+                    let refresh_token = exchange(&code)
+                        .instrument(trace_span!("/exchange", code))
+                        .await.map_err(|err| err.to_string())?;
+                    Ok(refresh_token)
+                }
+        ))
         .route(
             "/token",
             post(
@@ -133,6 +150,32 @@ async fn authorize() -> Result<String> {
     Ok(code)
 }
 
+async fn exchange(code: impl AsRef<str>) -> Result<String> {
+    #[derive(serde::Deserialize)]
+    struct TokenExchangeResponse {
+        refresh_token: String,
+    }
+
+    let response: TokenExchangeResponse = reqwest::Client::new()
+        .post("https://login.microsoftonline.com/common/oauth2/v2.0/token")
+        .form(&[
+            ("client_id", CLIENT_ID),
+            ("grant_type", "authorization_code"),
+            ("code", code.as_ref()),
+            ("redirect_uri", "https://localhost"),
+        ])
+        .send()
+        .await
+        .context("send upstream token exchange request")?
+        .json()
+        .await
+        .context("read upstream token exchange response")?;
+
+    trace!("response {}", response.refresh_token);
+
+    Ok(response.refresh_token)
+}
+
 async fn fetch_access_token(refresh_token: impl AsRef<str>) -> Result<String> {
     let response = reqwest::Client::new()
         .post("https://login.microsoftonline.com/common/oauth2/v2.0/token")
@@ -140,9 +183,6 @@ async fn fetch_access_token(refresh_token: impl AsRef<str>) -> Result<String> {
             ("client_id", CLIENT_ID),
             ("grant_type", "refresh_token"),
             ("refresh_token", refresh_token.as_ref()),
-            // ("grant_type", "authorization_code"),
-            // ("code", refresh_token.as_ref()),
-            // ("redirect_uri", "https://localhost"),
         ])
         .send()
         .await
