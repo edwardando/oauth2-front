@@ -56,13 +56,14 @@ sudo make install
 
 Now to configure claws-mail:
   - Configure → Create new account
-  - IMAP account. Your user name is your email, don't put password.
+  - IMAP account. Your user name is your email, don't put a password.
     The IMAP and SMTP servers are the normal ones.
   - In auth for IMAP and SMTP put OAuth2.
   - On the OAuth2 page, select "EPFL" (leave client id and secret blank) and press [open default browser with request]
   - This will make a request to the proxy (which open a localhost:1312), who will then use the geckodriver to open a window where you should log in
   - After logging in a "Unable to connect" flashes up (this is OK). There should be a window waiting saying OAuth was imported successfully into claws-mail. You can close it.
   - If successful, you will find your password filled in, well done!
+N.B. we;ve had some weird issues when IPv6 is blocked on the network connection
 
 # Configuration for aerc
 
